@@ -8,15 +8,17 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.os.Handler;
+import android.os.Looper;
+import android.widget.Toast;
 
+import com.udacity.stockhawk.R;
 import com.udacity.stockhawk.data.Contract;
 import com.udacity.stockhawk.data.PrefUtils;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -40,57 +42,40 @@ public final class QuoteSyncJob {
     private QuoteSyncJob() {
     }
 
-    static void getQuotes(Context context) {
-
+    static void getQuotes(final Context context) {
         Timber.d("Running sync job");
 
         Calendar from = Calendar.getInstance();
         Calendar to = Calendar.getInstance();
         from.add(Calendar.YEAR, -YEARS_OF_HISTORY);
-
+        String symbol = null;
         try {
 
             Set<String> stockPref = PrefUtils.getStocks(context);
-            Set<String> stockCopy = new HashSet<>();
-            stockCopy.addAll(stockPref);
             String[] stockArray = stockPref.toArray(new String[stockPref.size()]);
 
-            Timber.d(stockCopy.toString());
+            Timber.d(stockPref.toString());
 
             if (stockArray.length == 0) {
                 return;
             }
 
             Map<String, Stock> quotes = YahooFinance.get(stockArray);
-            Iterator<String> iterator = stockCopy.iterator();
 
             Timber.d(quotes.toString());
 
             ArrayList<ContentValues> quoteCVs = new ArrayList<>();
 
-            while (iterator.hasNext()) {
-                String symbol = iterator.next();
+            for(Map.Entry<String,Stock> stocks:quotes.entrySet()){
+                symbol = stocks.getKey();
 
-
-                Stock stock = quotes.get(symbol);
+                Stock stock = stocks.getValue();
                 StockQuote quote = stock.getQuote();
-
                 float price = quote.getPrice().floatValue();
                 float change = quote.getChange().floatValue();
                 float percentChange = quote.getChangeInPercent().floatValue();
 
-                // WARNING! Don't request historical data for a stock that doesn't exist!
-                // The request will hang forever X_x
                 List<HistoricalQuote> history = stock.getHistory(from, to, Interval.WEEKLY);
-
-                StringBuilder historyBuilder = new StringBuilder();
-
-                for (HistoricalQuote it : history) {
-                    historyBuilder.append(it.getDate().getTimeInMillis());
-                    historyBuilder.append(", ");
-                    historyBuilder.append(it.getClose());
-                    historyBuilder.append("\n");
-                }
 
                 ContentValues quoteCV = new ContentValues();
                 quoteCV.put(Contract.Quote.COLUMN_SYMBOL, symbol);
@@ -98,23 +83,60 @@ public final class QuoteSyncJob {
                 quoteCV.put(Contract.Quote.COLUMN_PERCENTAGE_CHANGE, percentChange);
                 quoteCV.put(Contract.Quote.COLUMN_ABSOLUTE_CHANGE, change);
 
-
-                quoteCV.put(Contract.Quote.COLUMN_HISTORY, historyBuilder.toString());
+                if(history.isEmpty()){
+                    Timber.w("No historical quotes for '"+ symbol + "'. Service will try to update next time");
+                }
+                else {
+                    StringBuilder historyBuilder = new StringBuilder();
+                    for (HistoricalQuote it : history) {
+                        historyBuilder.append(it.getDate().getTimeInMillis());
+                        historyBuilder.append(", ");
+                        historyBuilder.append(it.getClose());
+                        historyBuilder.append("\n");
+                    }
+                    quoteCV.put(Contract.Quote.COLUMN_HISTORY, historyBuilder.toString());
+                }
 
                 quoteCVs.add(quoteCV);
-
             }
 
             context.getContentResolver()
                     .bulkInsert(
                             Contract.Quote.URI,
                             quoteCVs.toArray(new ContentValues[quoteCVs.size()]));
-
+        }
+        catch (IOException exception) {
+            Timber.e(exception, "Error fetching stock quotes");
+        }
+        catch (NullPointerException e){
+            final String message = context.getString(R.string.toast_stock_no_exist, symbol);
+            Timber.e(e,message);
+            PrefUtils.removeStock(context,symbol);
+            context.getContentResolver().notifyChange(Contract.Quote.URI,null);
+            Handler handler = new Handler(Looper.getMainLooper());
+            handler.post(new Runnable() {
+                @Override
+                public void run() {
+                    Toast.makeText(context,message,Toast.LENGTH_LONG).show();
+                }
+            });
+        }
+        catch (final Exception ex){
+            final String message = context.getString(R.string.toast_error_retrieving_data);
+            Timber.e(ex,message);
+            PrefUtils.removeStock(context,symbol);
+            context.getContentResolver().notifyChange(Contract.Quote.URI,null);
+            Handler handler = new Handler(Looper.getMainLooper());
+            handler.post(new Runnable() {
+                @Override
+                public void run() {
+                    Toast.makeText(context,message,Toast.LENGTH_LONG).show();
+                }
+            });
+        }
+        finally {
             Intent dataUpdatedIntent = new Intent(ACTION_DATA_UPDATED);
             context.sendBroadcast(dataUpdatedIntent);
-
-        } catch (IOException exception) {
-            Timber.e(exception, "Error fetching stock quotes");
         }
     }
 
@@ -167,6 +189,4 @@ public final class QuoteSyncJob {
 
         }
     }
-
-
 }

@@ -7,6 +7,7 @@ import android.app.Dialog;
 import android.app.DialogFragment;
 import android.content.DialogInterface;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -14,6 +15,7 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.udacity.stockhawk.R;
 
@@ -66,11 +68,20 @@ public class AddStockDialog extends DialogFragment {
     }
 
     private void addStock() {
-        Activity parent = getActivity();
-        if (parent instanceof MainActivity) {
-            ((MainActivity) parent).addStock(stock.getText().toString());
+        if(TextUtils.isEmpty(stock.getText())) {
+            Toast.makeText(
+                            stock.getContext()
+                            ,getString(R.string.message_stock_empty)
+                            ,Toast.LENGTH_LONG)
+                    .show();
         }
-        dismissAllowingStateLoss();
+        else {
+            Activity parent = getActivity();
+            if (parent instanceof MainActivity) {
+                ((MainActivity) parent).addStock(stock.getText().toString());
+            }
+            dismissAllowingStateLoss();
+        }
     }
 
 

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<merge xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    tools:context="com.udacity.stockhawk.ui.DetailStockActivity">
+
+    <com.github.mikephil.charting.charts.LineChart
+        android:id="@+id/stock_chart"
+        android:layout_height="match_parent"
+        android:layout_width="match_parent"
+        android:layout_margin="@dimen/activity_horizontal_margin"
+        android:contentDescription="@string/content_description_chart"/>
+    <TextView
+        android:id="@+id/error_message"
+        android:layout_gravity="center"
+        android:textAlignment="center"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/error_no_historical_info"
+        android:visibility="invisible"
+        android:textAppearance="@android:style/TextAppearance.Medium"/>
+</merge>
